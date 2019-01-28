@@ -22,9 +22,11 @@
     - name: 'Including cron job'
       include_tasks: '/opt/plexguide/containers/_core.yml'
 
-    # FOLDER CREATION #############################################################
     - name: 'Including folders'
       include_tasks: '/opt/plexguide/containers/_folders.yml'
+
+    - name: 'Including plugins'
+      include_tasks: '/opt/plexguide/containers/_plugins.yml'
 
     # LABELS ######################################################################
     - name: 'Adding Traefik'
@@ -41,7 +43,8 @@
           - '/etc/localtime:/etc/localtime:ro'
           - '/opt/appdata/{{pgrole}}:/config'
           - '{{path.stdout}}:{{path.stdout}}'
-
+          - '/mnt:/mnt'
+          
     - name: 'Setting PG ENV'
       set_fact:
         pg_env:
@@ -72,7 +75,7 @@
         labels: '{{pg_labels}}'
 
     # CONFIGURATION ####################################################
-    - name: 'Wating for {{pgrole}} to start'
+    - name: 'Waiting for {{pgrole}} to initialize'
       wait_for:
       path: '/opt/appdata/{{pgrole}}/qBittorrent/qBittorrent.conf'
       state: present
@@ -261,8 +264,7 @@
             allow_no_value: yes
             force: yes
             state: present
-
-      #when: not confcheck.stat.exists
+      when: not confcheck.stat.exists
 
       
     - name: Restart {{pgrole}}

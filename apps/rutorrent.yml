@@ -27,9 +27,11 @@
     - name: 'Including cron job'
       include_tasks: '/opt/plexguide/containers/_core.yml'
 
-    # FOLDER CREATION #############################################################
     - name: 'Including folders'
-      include_tasks: '/opt/plexguide/containers/_folders.yml'
+      include_tasks: '/opt/plexguide/containers/_downloaders.yml'
+
+    - name: 'Including plugins'
+      include_tasks: '/opt/plexguide/containers/_plugins.yml'
 
     - name: Checking for existing app data
       stat:
@@ -52,6 +54,7 @@
           - '/opt/appdata/{{pgrole}}:/config'
           - '/opt/appdata/{{pgrole}}/sock:/run/php'
           - '{{path.stdout}}:{{path.stdout}}'
+          - '/mnt:/mnt'
 
     - name: 'Setting PG ENV'
       set_fact:
@@ -82,8 +85,26 @@
         stop_timeout: '240'
         labels: '{{pg_labels}}'
 
+    # PLUGINS ####################################################
+    - name: Download and unarchive rutorrent mobile
+      unarchive:
+        src: https://github.com/xombiemp/rutorrentMobile/archive/master.zip
+        dest: /tmp
+        remote_src: yes
+
+    - name: Move rutorrent mobile plugin
+      shell: mv /tmp/rutorrentMobile-master /tmp/mobile
+
+    - name: Copy rutorrent mobile plugin
+      copy:
+        src: /tmp/mobile
+        dest: /opt/appdata/{{pgrole}}/plugins
+        owner: 1000
+        group: 1000
+        mode: 0755
+
     # CONFIGURATION ####################################################
-    - name: rtorrent.rc creation
+    - name: 'Waiting for {{pgrole}} to initialize'
       wait_for:
         path: '/opt/appdata/{{pgrole}}/rtorrent/rtorrent.rc'
         state: present
@@ -173,14 +194,14 @@
             regexp: '^#*max_uploads\s*=.*'
             line: 'max_uploads = 15'
             state: present
-            
+
         - name: max_downloads
           lineinfile:
             path: '/opt/appdata/{{pgrole}}/rtorrent/rtorrent.rc'
             regexp: '^#*max_downloads\s*=.*'
-            line: 'max_downloads = 5'
+            line: 'max_downloads = 10'
             state: present
-            
+
         - name: Upload Rate
           lineinfile:
             path: '/opt/appdata/{{pgrole}}/rtorrent/rtorrent.rc'
@@ -257,9 +278,23 @@
             regexp: '#*network.receive_buffer.size\s*=.*'
             line: 'network.receive_buffer.size = 2'
             state: present
-            
+
+        - name: Do not save uploaded Torrents
+          lineinfile:
+            path: '/opt/appdata/{{pgrole}}/rutorrent/settings/config.php'
+            regexp: '\$saveUploadedTorrents\s*=.*'
+            line: '$saveUploadedTorrents = false;'
+            state: present
+
+        - name: overwrite uploaded Torrents
+          lineinfile:
+            path: '/opt/appdata/{{pgrole}}/rutorrent/settings/config.php'
+            regexp: '\$overwriteUploadedTorrents\s*=.*'
+            line: '$overwriteUploadedTorrents = true;'
+            state: present
+      when: not rccheck.stat.exists
+
     - name: Restart Docker Container
       docker_container:
         name: '{{pgrole}}'
         state: started
-      #when: not rccheck.stat.exists
